@@ -1,0 +1,141 @@
+/* -------- Body & Global -------- */
+body {
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    background: #f4f6f8;
+    color: #333;
+    margin: 0;
+    padding: 0;
+}
+
+/* -------- Navbar -------- */
+.navbar {
+    background-color: #1e3a8a;
+    color: white;
+    padding: 10px 20px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.navbar a {
+    color: white;
+    text-decoration: none;
+    margin-left: 15px;
+    font-weight: 500;
+}
+
+.navbar a:hover {
+    text-decoration: underline;
+}
+
+/* -------- Container -------- */
+.container {
+    max-width: 900px;
+    margin: 40px auto;
+    padding: 20px;
+    background: white;
+    border-radius: 12px;
+    box-shadow: 0 5px 20px rgba(0,0,0,0.1);
+}
+
+/* -------- Form Inputs -------- */
+input, button {
+    border-radius: 8px;
+    padding: 10px;
+    font-size: 16px;
+}
+
+input:focus {
+    outline: none;
+    border: 2px solid #1e3a8a;
+}
+
+button {
+    background-color: #1e3a8a;
+    color: white;
+    border: none;
+    cursor: pointer;
+    transition: 0.3s;
+}
+
+button:hover {
+    background-color: #3b82f6;
+}
+
+/* -------- Cards -------- */
+.card {
+    background: white;
+    padding: 25px;
+    border-radius: 12px;
+    box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+    margin-bottom: 30px;
+}
+
+/* -------- Alerts -------- */
+.alert {
+    padding: 10px;
+    border-radius: 8px;
+    margin-top: 15px;
+    font-weight: 500;
+}
+
+.alert-success {
+    background-color: #d1fae5;
+    color: #065f46;
+}
+
+.alert-warning {
+    background-color: #fef3c7;
+    color: #78350f;
+}
+
+.alert-danger {
+    background-color: #fee2e2;
+    color: #b91c1c;
+}
+
+/* -------- Tables -------- */
+table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 20px;
+}
+
+th, td {
+    padding: 12px;
+    text-align: left;
+    border-bottom: 1px solid #ddd;
+}
+
+th {
+    background-color: #1e3a8a;
+    color: white;
+}
+
+/* -------- QR Image -------- */
+.qr-img {
+    max-width: 200px;
+    margin-top: 15px;
+}
+
+/* -------- Headings -------- */
+h1,h2,h3,h4,h5 {
+    color: #1e3a8a;
+}
+
+/* -------- Input search -------- */
+#searchInput {
+    max-width: 400px;
+    margin-bottom: 20px;
+    padding: 10px;
+}
+
+/* -------- Links -------- */
+a {
+    text-decoration: none;
+    color: #1e3a8a;
+}
+
+a:hover {
+    text-decoration: underline;
+}
