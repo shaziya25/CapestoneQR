@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Attendance Result</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+
+    <!-- Bootstrap -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+
+    <style>
+        body {
+            background: #f4f6f8;
+            font-family: "Segoe UI", system-ui, sans-serif;
+            padding: 20px;
+        }
+
+        .main-card {
+            max-width: 420px;
+            margin: auto;
+            background: #ffffff;
+            border-radius: 18px;
+            padding: 22px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.08);
+        }
+
+        .welcome {
+            font-size: 1.6rem;
+            font-weight: 700;
+            color: #1f3c88;
+            margin-bottom: 8px;
+        }
+
+        .sub-info {
+            font-size: 1rem;
+            font-weight: 600;
+            color: #1f3c88;
+            margin-bottom: 18px;
+        }
+
+        .stats-box {
+            background: #d9fbe8;
+            border-radius: 14px;
+            padding: 18px;
+            margin-bottom: 16px;
+        }
+
+        .stats-box p {
+            margin: 0 0 10px;
+            font-size: 1rem;
+            font-weight: 600;
+            color: #0f5132;
+        }
+
+        .stats-box p:last-child {
+            margin-bottom: 0;
+        }
+
+        .alert-status {
+            border-radius: 12px;
+            font-weight: 600;
+            font-size: 1rem;
+            padding: 14px;
+            text-align: center;
+        }
+
+        .status-good {
+            background: #e6f4ea;
+            color: #198754;
+        }
+
+        .status-neutral {
+            background: #fff4e5;
+            color: #fd7e14;
+        }
+
+        .status-bad {
+            background: #fdecea;
+            color: #dc3545;
+        }
+
+        .back-link {
+            display: inline-block;
+            margin-top: 16px;
+            font-weight: 600;
+            color: #0d6efd;
+            text-decoration: none;
+        }
+
+        .back-link:hover {
+            text-decoration: underline;
+        }
+    </style>
+</head>
+<body>
+
+<div class="main-card">
+
+    <div class="welcome">
+        Welcome {{ student_name }}
+    </div>
+
+    <div class="sub-info">
+        Subject: {{ subject }} &nbsp;|&nbsp; Class: {{ class_id }}
+    </div>
+
+    <div class="stats-box">
+        <p>Total Sessions: {{ total_classes }}</p>
+        <p>Attended: {{ attended }}</p>
+        <p>Missed: {{ missed }}</p>
+        <p>Attendance %: {{ percent }}%</p>
+    </div>
+
+    <div class="
+        alert-status
+        {% if status == 'Good Standing' %}status-good{% endif %}
+        {% if status == 'Needs Improvement' %}status-neutral{% endif %}
+        {% if status == 'Below Requirement' %}status-bad{% endif %}
+    ">
+        {{ status }}
+    </div>
+
+    <a href="/" class="back-link">Back to Home</a>
+
+</div>
+
+</body>
+</html>

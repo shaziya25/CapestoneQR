@@ -1,0 +1,6 @@
+{% if session_id %}
+<div style="background:#fff3cd;padding:10px;margin-top:15px;border-radius:5px;">
+⚠ QR Code will expire at <b>{{expiry}}</b>
+</div>
+<img src="/static/qr.png" style="margin-top:15px;">
+{% endif %}
