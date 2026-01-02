@@ -1,20 +1,38 @@
-from flask import Flask, render_template, request, redirect, session, send_file, make_response, Response
-import csv, uuid, qrcode
+from flask import Flask, render_template, request, redirect, session, make_response, Response
+import csv, uuid, qrcode, os, math
 from datetime import datetime, timedelta
-import os
 from io import StringIO
 
 app = Flask(__name__)
 app.secret_key = "secret123"
 
+# Files
 ADMIN_FILE = "admin.csv"
 SESSION_FILE = "sessions.csv"
 ATT_FILE = "attendance.csv"
+
+# Classroom location (change to your coordinates)
+CLASS_LAT = 19.1759
+CLASS_LNG = 72.8676
+MAX_DISTANCE = 80  # meters
 
 @app.after_request
 def add_ngrok_header(response):
     response.headers["ngrok-skip-browser-warning"] = "true"
     return response
+
+# --------- DISTANCE FUNCTION (Haversine) ---------
+def distance_meters(lat1, lon1, lat2, lon2):
+    R = 6371000  # Earth radius in meters
+    phi1 = math.radians(lat1)
+    phi2 = math.radians(lat2)
+    dphi = math.radians(lat2 - lat1)
+    dlambda = math.radians(lon2 - lon1)
+
+    a = math.sin(dphi / 2) ** 2 + math.cos(phi1) * math.cos(phi2) * math.sin(dlambda / 2) ** 2
+    c = 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a))
+
+    return R * c
 
 # ---------------- REGISTER ----------------
 @app.route("/", methods=["GET", "POST"])
@@ -61,7 +79,7 @@ def dashboard():
             for r in csv.reader(f):
                 if r and len(r) >= 6 and r[5] == admin_id:
                     if len(r) < 7:
-                        r.append("ON")  # default lock
+                        r.append("ON")
                     sessions.append(r)
     except FileNotFoundError:
         pass
@@ -99,13 +117,16 @@ def toggle_lock(sid):
         return redirect("/login")
 
     rows = []
-    with open(SESSION_FILE) as f:
-        for r in csv.reader(f):
-            if r and r[0] == sid and r[5] == session["admin"]:
-                if len(r) < 7:
-                    r.append("ON")
-                r[6] = "OFF" if r[6] == "ON" else "ON"
-            rows.append(r)
+    try:
+        with open(SESSION_FILE) as f:
+            for r in csv.reader(f):
+                if r and r[0] == sid and r[5] == session["admin"]:
+                    if len(r) < 7:
+                        r.append("ON")
+                    r[6] = "OFF" if r[6] == "ON" else "ON"
+                rows.append(r)
+    except FileNotFoundError:
+        pass
 
     with open(SESSION_FILE, "w", newline="") as f:
         csv.writer(f).writerows(rows)
@@ -142,8 +163,9 @@ def generate():
     return redirect("/dashboard")
 
 # ---------------- ATTENDANCE ----------------
-@app.route("/attendance/<sid>", methods=["GET", "POST"])
+@app.route("/attendance/<sid>", methods=["GET","POST"])
 def attendance(sid):
+    # Fetch session data
     session_data = None
     try:
         with open(SESSION_FILE) as f:
@@ -160,49 +182,68 @@ def attendance(sid):
         return "Invalid session", 404
 
     subject, class_id = session_data[1], session_data[2]
-    expiry = datetime.strptime(session_data[4], "%Y-%m-%d %H:%M:%S")
     device_lock = session_data[6]
 
-    if datetime.now() > expiry:
-        return "QR expired", 403
-
+    error = None
     device_cookie = request.cookies.get("device_id") or str(uuid.uuid4())
 
     if request.method == "POST":
-        roll = request.form["roll"].strip()
-        name = request.form["name"].strip()
+        name = request.form.get("name")
+        roll = request.form.get("roll")
+        lat = request.form.get("latitude")
+        lon = request.form.get("longitude")
 
+        if not lat or not lon:
+            error = "Location is required!"
+            resp = make_response(render_template("mark_attendance.html", subject=subject, class_id=class_id, error=error))
+            resp.set_cookie("device_id", device_cookie, max_age=60*60*24*30)
+            return resp
+
+        lat = float(lat)
+        lon = float(lon)
+        dist = distance_meters(CLASS_LAT, CLASS_LNG, lat, lon)
+
+        if dist > MAX_DISTANCE:
+            error = f"You are too far from the class! ({int(dist)} meters away)"
+            resp = make_response(render_template("mark_attendance.html", subject=subject, class_id=class_id, error=error))
+            resp.set_cookie("device_id", device_cookie, max_age=60*60*24*30)
+            return resp
+
+        # Check device lock and duplicate roll
         try:
             with open(ATT_FILE) as f:
                 for r in csv.reader(f):
-                    if device_lock == "ON" and r and len(r) >= 7 and r[0] == sid and r[6] == device_cookie:
-                        return render_template("mark_attendance.html",
-                                               subject=subject, class_id=class_id,
-                                               error="Attendance already marked from this device")
-                    if r and r[0] == sid and r[3] == roll:
-                        return render_template("mark_attendance.html",
-                                               subject=subject, class_id=class_id,
-                                               error="Attendance already marked for this roll number")
+                    if r and r[0] == sid:
+                        if device_lock == "ON" and r[6] == device_cookie:
+                            error = "Attendance already marked from this device"
+                            resp = make_response(render_template("mark_attendance.html", subject=subject, class_id=class_id, error=error))
+                            resp.set_cookie("device_id", device_cookie, max_age=60*60*24*30)
+                            return resp
+                        if r[3] == roll:
+                            error = "Attendance already marked for this roll number"
+                            resp = make_response(render_template("mark_attendance.html", subject=subject, class_id=class_id, error=error))
+                            resp.set_cookie("device_id", device_cookie, max_age=60*60*24*30)
+                            return resp
         except FileNotFoundError:
             pass
 
+        # Save attendance
         with open(ATT_FILE, "a", newline="") as f:
             csv.writer(f).writerow([
-                sid, subject, class_id,
-                roll, name,
+                sid, subject, class_id, roll, name,
                 datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-                device_cookie
+                device_cookie, round(dist,2)
             ])
 
         resp = make_response(render_template("student_result.html",
                                              student_name=name, class_id=class_id,
                                              total_classes=1, attended=1, missed=0,
                                              percent=100, status="Good Standing"))
-        resp.set_cookie("device_id", device_cookie, max_age=60 * 60 * 24 * 30)
+        resp.set_cookie("device_id", device_cookie, max_age=60*60*24*30)
         return resp
 
-    resp = make_response(render_template("mark_attendance.html", subject=subject, class_id=class_id))
-    resp.set_cookie("device_id", device_cookie, max_age=60 * 60 * 24 * 30)
+    resp = make_response(render_template("mark_attendance.html", subject=subject, class_id=class_id, error=error))
+    resp.set_cookie("device_id", device_cookie, max_age=60*60*24*30)
     return resp
 
 # ---------------- RECORDS ----------------
@@ -213,10 +254,10 @@ def records():
 
     admin_id = session["admin"]
     search_query = ""
-    selected_session_id = request.args.get("session_id")  # for GET
+    selected_session_id = request.args.get("session_id")
 
     if request.method == "POST":
-        search_query = request.form.get("search", "").strip().lower()
+        search_query = request.form.get("search","").strip().lower()
         selected_session_id = request.form.get("session_id")
 
     admin_sessions = []
@@ -224,50 +265,27 @@ def records():
         with open(SESSION_FILE) as f:
             for row in csv.reader(f):
                 if row and len(row) >= 6 and row[5] == admin_id:
-                    if len(row) < 7:
-                        row.append("ON")
+                    if len(row) < 7: row.append("ON")
                     admin_sessions.append(row)
     except FileNotFoundError:
         pass
 
     session_ids = {s[0] for s in admin_sessions}
-
     records = []
+
     if selected_session_id and selected_session_id in session_ids:
         try:
             with open(ATT_FILE) as f:
                 for row in csv.reader(f):
-                    if not row or len(row) < 6:
-                        continue
-                    if row[0] != selected_session_id:
-                        continue
-                    if search_query and search_query not in row[3].lower() and search_query not in row[4].lower():
-                        continue
-                    records.append({
-                        "session_id": row[0],
-                        "subject": "",
-                        "class_id": "",
-                        "roll": row[3],
-                        "name": row[4],
-                        "timestamp": row[5]
-                    })
+                    if not row or len(row)<6: continue
+                    if row[0] != selected_session_id: continue
+                    if search_query and search_query not in row[3].lower() and search_query not in row[4].lower(): continue
+                    records.append(row)
         except FileNotFoundError:
             pass
 
-        for rec in records:
-            for sess in admin_sessions:
-                if sess[0] == rec["session_id"]:
-                    rec["subject"] = sess[1]
-                    rec["class_id"] = sess[2]
-                    break
-
-    return render_template(
-        "records.html",
-        records=records,
-        search_query=search_query,
-        sessions=admin_sessions,
-        selected_session_id=selected_session_id
-    )
+    return render_template("records.html", records=records, sessions=admin_sessions,
+                           selected_session_id=selected_session_id, search_query=search_query)
 
 # ---------------- DOWNLOAD ----------------
 @app.route("/download")
@@ -277,31 +295,31 @@ def download():
 
     session_id = request.args.get("session_id")
     if not session_id:
-        return redirect("/dashboard")
+        return "Session ID not specified", 400
 
     output = StringIO()
     writer = csv.writer(output)
+    writer.writerow(["session_id","subject","class_id","roll","name","timestamp","device_cookie","distance_m"])
 
-    header = ["session_id", "subject", "class_id", "roll", "name", "timestamp", "device_cookie"]
-    writer.writerow(header)
-
+    found = False
     try:
         with open(ATT_FILE, newline='') as f:
             reader = csv.reader(f)
             for row in reader:
                 if row and row[0] == session_id:
                     writer.writerow(row)
+                    found = True
     except FileNotFoundError:
         return "Attendance file not found", 404
 
+    if not found:
+        return "No attendance records for this session", 404
+
     output.seek(0)
     filename = f"attendance_{session_id}.csv"
-
-    return Response(
-        output.getvalue(),
-        mimetype="text/csv",
-        headers={"Content-Disposition": f"attachment; filename={filename}"}
-    )
+    return Response(output.getvalue(),
+                    mimetype="text/csv",
+                    headers={"Content-Disposition": f"attachment; filename={filename}"})
 
 # ---------------- LOGOUT ----------------
 @app.route("/logout")
@@ -310,4 +328,4 @@ def logout():
     return redirect("/login")
 
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=5000, debug=True)
+    app.run(debug=True, host="0.0.0.0", port=5000)
