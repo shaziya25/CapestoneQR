@@ -1,27 +1,7 @@
-bca4ef36,addm,A,2025-12-26 21:26:26,2025-12-26 21:31:26,Teacher1
-ca88e3dd,python,A,2025-12-26 21:27:20,2025-12-26 21:32:20,Teacher1
-d9b5daaa,addm,D,2025-12-26 21:31:10,2025-12-26 21:36:10,Teacher1
-fe4bc56f,python,b,2025-12-26 21:36:39,2025-12-26 21:41:39,Teacher1
-cbf64bb8,addm,b,2025-12-26 21:50:33,2025-12-26 21:55:33,Shaziya
-2fca5734,python,A,2025-12-26 21:55:18,2025-12-26 22:00:18,Rifat
-a784556e,DSA,A,2025-12-26 21:57:40,2025-12-26 22:07:40,shahzade khan,ON
-6a4e2f9d,python,A,2025-12-26 23:23:33,2025-12-26 23:28:33,shahzade khan
-9ca60a8b,maths,A,2025-12-26 23:25:42,2025-12-26 23:30:42,shahzade khan
-5913a614,english,D,2025-12-26 23:33:16,2025-12-26 23:38:16,Rifat
-baaca369,AWT,B,2025-12-30 16:50:20,2025-12-30 17:00:20,Shaziya26,ON
-session_id,subject,class_id,start,expiry,admin,device_lock
-ON
-b7daab42,addm,A,2025-12-30 17:21:16,2025-12-30 17:26:16,Shaziya26,ON
-c20f8be6,maths,C,2025-12-30 17:29:14,2025-12-30 17:39:14,Shaziya26,ON
-bc217816,DSA,C,2025-12-30 18:40:56,2025-12-30 18:45:56,Shaziya26,ON
-3786d166,Physics,B,2025-12-30 19:54:23,2025-12-30 20:04:23,Shaziya26,ON
-07a6d3b1,ENGLISH,B,2026-01-01 00:42:37,2026-01-01 01:02:37,Shaziya26,ON
-e0f32c2a,ENGLISH,B,2026-01-01 00:52:09,2026-01-01 01:02:09,Shaziya26,ON
-9188ebcf,Physics2,B,2026-01-01 01:04:09,2026-01-01 01:14:09,Shaziya26,ON
-7ea41f90,DSA,C,2026-01-02 13:51:53,2026-01-02 13:56:53,Shaziya,ON
-853bb56e,english,A,2026-01-02 13:56:23,2026-01-02 14:01:23,Shaziya,ON
-e0cc2870,addm,A,2026-01-02 14:08:17,2026-01-02 14:23:17,Shaziya,ON
-3de7c51c,Hindi,A,2026-01-02 14:39:51,2026-01-02 14:49:51,Shaziya,ON
-60ffc1c9,AWT,A,2026-01-02 14:49:53,2026-01-02 14:59:53,shahzade khan,ON
-ca5187b6,maths,b,2026-01-02 22:23:20,2026-01-02 22:33:20,Shaziya26,ON
-6c4c5423,AWT,D,2026-01-02 22:48:54,2026-01-02 22:53:54,Shaziya26,ON
+session_id,subject,class_id,start,expiry,admin,device_lock,latitude,longitude
+with open(SESSION_FILE) as f:
+    for r in csv.reader(f):
+        if r and r[5] == admin_id:
+            if len(r) < 9:
+                r.extend(["0", "0"])  # Default lat/lon if missing
+            sessions.append(r)

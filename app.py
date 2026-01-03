@@ -11,9 +11,6 @@ ADMIN_FILE = "admin.csv"
 SESSION_FILE = "sessions.csv"
 ATT_FILE = "attendance.csv"
 
-# Classroom location (change to your coordinates)
-CLASS_LAT = 19.1759
-CLASS_LNG = 72.8676
 MAX_DISTANCE = 80  # meters
 
 @app.after_request
@@ -77,9 +74,7 @@ def dashboard():
     try:
         with open(SESSION_FILE) as f:
             for r in csv.reader(f):
-                if r and len(r) >= 6 and r[5] == admin_id:
-                    if len(r) < 7:
-                        r.append("ON")
+                if r and len(r) >= 9 and r[5] == admin_id:
                     sessions.append(r)
     except FileNotFoundError:
         pass
@@ -142,6 +137,12 @@ def generate():
     subject = request.form["subject"].strip()
     class_id = request.form["class_id"].strip()
     duration = int(request.form["duration"])
+    lat = request.form.get("latitude")
+    lon = request.form.get("longitude")
+
+    if not lat or not lon:
+        # Just redirect back with an error? Or better: you can flash message or handle error page
+        return "Location required to generate QR", 400
 
     sid = str(uuid.uuid4())[:8]
     start = datetime.now()
@@ -153,7 +154,9 @@ def generate():
             start.strftime("%Y-%m-%d %H:%M:%S"),
             expiry.strftime("%Y-%m-%d %H:%M:%S"),
             session["admin"],
-            "ON"
+            "ON",
+            lat,
+            lon
         ])
 
     url = request.host_url + f"attendance/{sid}"
@@ -162,17 +165,17 @@ def generate():
 
     return redirect("/dashboard")
 
+
 # ---------------- ATTENDANCE ----------------
-@app.route("/attendance/<sid>", methods=["GET","POST"])
+@app.route("/attendance/<sid>", methods=["GET", "POST"])
 def attendance(sid):
-    # Fetch session data
     session_data = None
     try:
         with open(SESSION_FILE) as f:
             for r in csv.reader(f):
                 if r and r[0] == sid:
-                    if len(r) < 7:
-                        r.append("ON")
+                    while len(r) < 9:
+                        r.append("")
                     session_data = r
                     break
     except FileNotFoundError:
@@ -183,6 +186,11 @@ def attendance(sid):
 
     subject, class_id = session_data[1], session_data[2]
     device_lock = session_data[6]
+    try:
+        session_lat = float(session_data[7])
+        session_lon = float(session_data[8])
+    except (ValueError, IndexError):
+        return "Session location data missing or corrupted", 500
 
     error = None
     device_cookie = request.cookies.get("device_id") or str(uuid.uuid4())
@@ -196,20 +204,19 @@ def attendance(sid):
         if not lat or not lon:
             error = "Location is required!"
             resp = make_response(render_template("mark_attendance.html", subject=subject, class_id=class_id, error=error))
-            resp.set_cookie("device_id", device_cookie, max_age=60*60*24*30)
+            resp.set_cookie("device_id", device_cookie, max_age=60 * 60 * 24 * 30)
             return resp
 
         lat = float(lat)
         lon = float(lon)
-        dist = distance_meters(CLASS_LAT, CLASS_LNG, lat, lon)
+        dist = distance_meters(session_lat, session_lon, lat, lon)
 
         if dist > MAX_DISTANCE:
             error = f"You are too far from the class! ({int(dist)} meters away)"
             resp = make_response(render_template("mark_attendance.html", subject=subject, class_id=class_id, error=error))
-            resp.set_cookie("device_id", device_cookie, max_age=60*60*24*30)
+            resp.set_cookie("device_id", device_cookie, max_age=60 * 60 * 24 * 30)
             return resp
 
-        # Check device lock and duplicate roll
         try:
             with open(ATT_FILE) as f:
                 for r in csv.reader(f):
@@ -217,33 +224,32 @@ def attendance(sid):
                         if device_lock == "ON" and r[6] == device_cookie:
                             error = "Attendance already marked from this device"
                             resp = make_response(render_template("mark_attendance.html", subject=subject, class_id=class_id, error=error))
-                            resp.set_cookie("device_id", device_cookie, max_age=60*60*24*30)
+                            resp.set_cookie("device_id", device_cookie, max_age=60 * 60 * 24 * 30)
                             return resp
                         if r[3] == roll:
                             error = "Attendance already marked for this roll number"
                             resp = make_response(render_template("mark_attendance.html", subject=subject, class_id=class_id, error=error))
-                            resp.set_cookie("device_id", device_cookie, max_age=60*60*24*30)
+                            resp.set_cookie("device_id", device_cookie, max_age=60 * 60 * 24 * 30)
                             return resp
         except FileNotFoundError:
             pass
 
-        # Save attendance
         with open(ATT_FILE, "a", newline="") as f:
             csv.writer(f).writerow([
                 sid, subject, class_id, roll, name,
                 datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-                device_cookie, round(dist,2)
+                device_cookie, round(dist, 2)
             ])
 
         resp = make_response(render_template("student_result.html",
                                              student_name=name, class_id=class_id,
                                              total_classes=1, attended=1, missed=0,
                                              percent=100, status="Good Standing"))
-        resp.set_cookie("device_id", device_cookie, max_age=60*60*24*30)
+        resp.set_cookie("device_id", device_cookie, max_age=60 * 60 * 24 * 30)
         return resp
 
     resp = make_response(render_template("mark_attendance.html", subject=subject, class_id=class_id, error=error))
-    resp.set_cookie("device_id", device_cookie, max_age=60*60*24*30)
+    resp.set_cookie("device_id", device_cookie, max_age=60 * 60 * 24 * 30)
     return resp
 
 # ---------------- RECORDS ----------------
@@ -257,15 +263,14 @@ def records():
     selected_session_id = request.args.get("session_id")
 
     if request.method == "POST":
-        search_query = request.form.get("search","").strip().lower()
+        search_query = request.form.get("search", "").strip().lower()
         selected_session_id = request.form.get("session_id")
 
     admin_sessions = []
     try:
         with open(SESSION_FILE) as f:
             for row in csv.reader(f):
-                if row and len(row) >= 6 and row[5] == admin_id:
-                    if len(row) < 7: row.append("ON")
+                if row and len(row) >= 9 and row[5] == admin_id:
                     admin_sessions.append(row)
     except FileNotFoundError:
         pass
@@ -277,9 +282,12 @@ def records():
         try:
             with open(ATT_FILE) as f:
                 for row in csv.reader(f):
-                    if not row or len(row)<6: continue
-                    if row[0] != selected_session_id: continue
-                    if search_query and search_query not in row[3].lower() and search_query not in row[4].lower(): continue
+                    if not row or len(row) < 6:
+                        continue
+                    if row[0] != selected_session_id:
+                        continue
+                    if search_query and search_query not in row[3].lower() and search_query not in row[4].lower():
+                        continue
                     records.append(row)
         except FileNotFoundError:
             pass
@@ -299,7 +307,7 @@ def download():
 
     output = StringIO()
     writer = csv.writer(output)
-    writer.writerow(["session_id","subject","class_id","roll","name","timestamp","device_cookie","distance_m"])
+    writer.writerow(["session_id", "subject", "class_id", "roll", "name", "timestamp", "device_cookie", "distance_m"])
 
     found = False
     try:
