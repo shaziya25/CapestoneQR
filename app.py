@@ -13,6 +13,15 @@ ATT_FILE = "attendance.csv"
 MAX_DISTANCE = 80  # meters
 
 
+# ---------- ENSURE FILES EXIST (CRITICAL FOR RENDER) ----------
+def ensure_files():
+    for file in [ADMIN_FILE, SESSION_FILE, ATT_FILE]:
+        if not os.path.exists(file):
+            open(file, "w").close()
+
+ensure_files()
+
+
 # ---------- Distance (Haversine) ----------
 def distance_meters(lat1, lon1, lat2, lon2):
     R = 6371000
@@ -44,14 +53,11 @@ def login():
     if request.method == "POST":
         admin_id = request.form["admin_id"].strip()
         password = request.form["password"].strip()
-        try:
-            with open(ADMIN_FILE) as f:
-                for r in csv.reader(f):
-                    if r and r[0] == admin_id and r[1] == password:
-                        session["admin"] = admin_id
-                        return redirect("/dashboard")
-        except FileNotFoundError:
-            pass
+        with open(ADMIN_FILE) as f:
+            for r in csv.reader(f):
+                if len(r) >= 2 and r[0] == admin_id and r[1] == password:
+                    session["admin"] = admin_id
+                    return redirect("/dashboard")
     return render_template("login.html")
 
 
@@ -64,24 +70,18 @@ def dashboard():
     sessions, records = [], []
     selected_session_id = request.args.get("session_id")
 
-    try:
-        with open(SESSION_FILE) as f:
-            for r in csv.reader(f):
-                if r and r[5] == session["admin"]:
-                    sessions.append(r)
-    except FileNotFoundError:
-        pass
+    with open(SESSION_FILE) as f:
+        for r in csv.reader(f):
+            if len(r) >= 6 and r[5] == session["admin"]:
+                sessions.append(r)
 
     session_ids = {s[0] for s in sessions}
 
-    try:
-        with open(ATT_FILE) as f:
-            for r in csv.reader(f):
-                if r and r[0] in session_ids:
-                    if not selected_session_id or r[0] == selected_session_id:
-                        records.append(r)
-    except FileNotFoundError:
-        pass
+    with open(ATT_FILE) as f:
+        for r in csv.reader(f):
+            if len(r) >= 1 and r[0] in session_ids:
+                if not selected_session_id or r[0] == selected_session_id:
+                    records.append(r)
 
     qr_data = dict(session_id=None, subject=None, class_id=None, expiry=None)
 
@@ -103,30 +103,30 @@ def generate():
     if "admin" not in session:
         return redirect("/login")
 
-    subject = request.form.get("subject")
-    class_id = request.form.get("class_id")
-    duration = int(request.form.get("duration", 0))
     lat = request.form.get("latitude")
     lon = request.form.get("longitude")
 
     if not lat or not lon:
-        return redirect(url_for("dashboard"))
+        return redirect("/dashboard")
 
     sid = str(uuid.uuid4())[:8]
-    start = datetime.now()
-    expiry = start + timedelta(minutes=duration)
+    expiry = datetime.now() + timedelta(minutes=int(request.form["duration"]))
 
     with open(SESSION_FILE, "a", newline="") as f:
         csv.writer(f).writerow([
-            sid, subject, class_id,
-            start.strftime("%Y-%m-%d %H:%M:%S"),
+            sid,
+            request.form["subject"],
+            request.form["class_id"],
+            datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
             expiry.strftime("%Y-%m-%d %H:%M:%S"),
-            session["admin"], "ON", lat, lon
+            session["admin"],
+            "ON",
+            lat,
+            lon
         ])
 
-    url = request.host_url + f"attendance/{sid}"
     os.makedirs("static", exist_ok=True)
-    qrcode.make(url).save("static/qr.png")
+    qrcode.make(request.host_url + f"attendance/{sid}").save("static/qr.png")
 
     return redirect(url_for("dashboard", session_id=sid))
 
@@ -135,14 +135,11 @@ def generate():
 @app.route("/attendance/<sid>", methods=["GET", "POST"])
 def attendance(sid):
     session_data = None
-    try:
-        with open(SESSION_FILE) as f:
-            for r in csv.reader(f):
-                if r and r[0] == sid:
-                    session_data = r
-                    break
-    except FileNotFoundError:
-        pass
+    with open(SESSION_FILE) as f:
+        for r in csv.reader(f):
+            if len(r) >= 9 and r[0] == sid:
+                session_data = r
+                break
 
     if not session_data:
         return "Invalid session"
@@ -153,8 +150,6 @@ def attendance(sid):
     device_cookie = request.cookies.get("device_id") or str(uuid.uuid4())
 
     if request.method == "POST":
-        name = request.form["name"]
-        roll = request.form["roll"]
         lat = float(request.form["latitude"])
         lon = float(request.form["longitude"])
 
@@ -165,15 +160,20 @@ def attendance(sid):
 
         with open(ATT_FILE, "a", newline="") as f:
             csv.writer(f).writerow([
-                sid, subject, class_id, roll, name,
+                sid, subject, class_id,
+                request.form["roll"],
+                request.form["name"],
                 datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
                 device_cookie, round(dist, 2)
             ])
 
         resp = make_response(render_template("student_result.html",
-                                             student_name=name, class_id=class_id,
-                                             total_classes=1, attended=1,
-                                             missed=0, percent=100,
+                                             student_name=request.form["name"],
+                                             class_id=class_id,
+                                             total_classes=1,
+                                             attended=1,
+                                             missed=0,
+                                             percent=100,
                                              status="Good Standing"))
         resp.set_cookie("device_id", device_cookie, max_age=60 * 60 * 24 * 30)
         return resp
@@ -189,7 +189,3 @@ def attendance(sid):
 def logout():
     session.clear()
     return redirect("/login")
-
-
-if __name__ == "__main__":
-    app.run(debug=True)
