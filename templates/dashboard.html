@@ -1,162 +1,80 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Dashboard - QR Attendance</title>
-<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet" />
-<style>
-    body { background: #f5f7fa; }
-    .card { box-shadow: 0 4px 8px rgba(0,0,0,0.1); margin-bottom: 20px; transition: 0.3s; }
-    .card:hover { transform: translateY(-3px); }
-    .top-bar { display: flex; justify-content: flex-end; gap: 10px; margin-bottom: 20px; flex-wrap: wrap; }
-    .qr-section { text-align: center; margin-top: 20px; }
-    .countdown { font-weight: bold; color: red; }
-</style>
+<meta charset="UTF-8">
+<title>Dashboard</title>
+<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
 </head>
-<body>
+<body class="bg-light">
+
 <div class="container mt-4">
 
-    <div class="top-bar">
-        <a href="/dashboard" class="btn btn-primary">Dashboard</a>
-        <a href="/records" class="btn btn-info">Records</a>
-        {% if session_id %}
-        <a href="/download?session_id={{ session_id }}" class="btn btn-success">Download CSV</a>
-        {% endif %}
-        <a href="/logout" class="btn btn-danger">Logout</a>
-    </div>
+<div class="d-flex justify-content-end gap-2 mb-3">
+    <a href="/dashboard" class="btn btn-primary">Dashboard</a>
+    <a href="/logout" class="btn btn-danger">Logout</a>
+</div>
 
-    <h2>Welcome, {{ session['admin'] }}</h2>
+<h3>Welcome, {{ session['admin'] }}</h3>
 
-    <!-- Generate QR -->
-    <div class="card p-4 mb-3">
-        <h5>Generate QR for Class Session</h5>
-        <form method="POST" action="/generate" class="row g-3" id="generateForm">
-            <div class="col-md-4">
-                <input type="text" name="subject" class="form-control" placeholder="Subject" required />
-            </div>
-            <div class="col-md-4">
-                <input type="text" name="class_id" class="form-control" placeholder="Class ID" required />
-            </div>
-            <div class="col-md-2">
-                <input type="number" name="duration" class="form-control" placeholder="Duration(min)" required />
-            </div>
+<div class="card p-4 mb-4">
+<h5>Generate QR</h5>
 
-            <!-- Hidden latitude & longitude inputs -->
-            <input type="hidden" name="latitude" id="latitude" />
-            <input type="hidden" name="longitude" id="longitude" />
+<form method="POST" action="/generate" id="qrForm" class="row g-3">
 
-            <div class="col-md-2 d-flex flex-column gap-2">
-                <button type="button" id="detectLocationBtn" class="btn btn-info w-100">Detect Location</button>
-                <button type="submit" id="generateBtn" class="btn btn-primary w-100" disabled>Generate QR</button>
-            </div>
-        </form>
-        <div id="locationError" class="alert alert-danger mt-2 d-none">
-            Location permission is required to generate QR.
-        </div>
-    </div>
+<input type="text" name="subject" class="form-control col" placeholder="Subject" required>
+<input type="text" name="class_id" class="form-control col" placeholder="Class" required>
+<input type="number" name="duration" class="form-control col" placeholder="Duration (min)" required>
 
-    <!-- QR Display -->
-    {% if session_id %}
-    <div class="card p-4 qr-section mb-3">
-        <h5>QR Code for Session: {{ session_id }}</h5>
-        <p>Subject: {{ subject }} | Class: {{ class_id }}</p>
-        <img src="{{ url_for('static', filename='qr.png') }}" style="max-width:200px;" />
-        <p class="countdown">Expires at: {{ expiry }}</p>
-    </div>
-    {% endif %}
+<input type="hidden" name="latitude" id="latitude">
+<input type="hidden" name="longitude" id="longitude">
 
-    <!-- Session History -->
-    <div class="card p-4 mb-3">
-        <h5>Session History</h5>
-        <ul class="list-group mt-3">
-            {% for s in sessions %}
-            <li class="list-group-item d-flex justify-content-between align-items-center flex-wrap">
-                <div>
-                    <strong>{{ s[1] }}</strong> (Class {{ s[2] }})<br />
-                    <small>{{ s[3] }}</small><br />
-                    <!-- Show admin session lat/lon if exists -->
-                    {% if s|length > 8 %}
-                    <small>Admin Location: {{ s[7] }}, {{ s[8] }}</small>
-                    {% endif %}
-                </div>
-                <div>
-                    {% if s[6] == "ON" %}
-                    <a href="/toggle-lock/{{ s[0] }}" class="btn btn-danger btn-sm">🔒 Lock ON</a>
-                    {% else %}
-                    <a href="/toggle-lock/{{ s[0] }}" class="btn btn-success btn-sm">🔓 Lock OFF</a>
-                    {% endif %}
-                </div>
-                <a href="/dashboard?session_id={{ s[0] }}" class="btn btn-sm btn-outline-primary mt-2 mt-md-0">View Attendance</a>
-            </li>
-            {% else %}
-            <li class="list-group-item text-muted">No sessions yet.</li>
-            {% endfor %}
-        </ul>
-    </div>
+<div class="col-12 d-flex gap-2">
+<button type="button" id="detectBtn" class="btn btn-info">Detect Location</button>
+<button type="submit" id="generateBtn" class="btn btn-success" disabled>Generate QR</button>
+</div>
 
-    <!-- Attendance Records -->
-    {% if records %}
-    <div class="card p-4 mb-3">
-        <h5>Attendance Records</h5>
-        <table class="table table-striped table-bordered mt-3">
-            <thead>
-                <tr><th>Roll No</th><th>Name</th><th>Timestamp</th></tr>
-            </thead>
-            <tbody>
-                {% for r in records %}
-                <tr>
-                    <td>{{ r[3] }}</td>
-                    <td>{{ r[4] }}</td>
-                    <td>{{ r[5] }}</td>
-                </tr>
-                {% endfor %}
-            </tbody>
-        </table>
-    </div>
-    {% endif %}
+<div id="locError" class="alert alert-danger d-none mt-2">
+Location permission is required.
+</div>
+
+</form>
+</div>
+
+{% if session_id %}
+<div class="card p-4 text-center">
+<h5>QR Code</h5>
+<p>{{ subject }} - {{ class_id }}</p>
+<img src="{{ url_for('static', filename='qr.png') }}" width="200">
+<p class="text-danger">Expires at {{ expiry }}</p>
+</div>
+{% endif %}
 
 </div>
 
-<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
 <script>
-    const detectBtn = document.getElementById("detectLocationBtn");
-    const generateBtn = document.getElementById("generateBtn");
-    const errorBox = document.getElementById("locationError");
-    const latInput = document.getElementById("latitude");
-    const lonInput = document.getElementById("longitude");
+const detectBtn = document.getElementById("detectBtn");
+const generateBtn = document.getElementById("generateBtn");
+const lat = document.getElementById("latitude");
+const lon = document.getElementById("longitude");
+const err = document.getElementById("locError");
 
-    generateBtn.disabled = true;
+detectBtn.onclick = () => {
+    err.classList.add("d-none");
 
-    detectBtn.onclick = () => {
-        errorBox.classList.add("d-none");
-
-        if (!navigator.geolocation) {
-            alert("Geolocation is not supported by your browser.");
-            return;
-        }
-
-        detectBtn.disabled = true;
-        detectBtn.innerText = "Detecting location...";
-
-        navigator.geolocation.getCurrentPosition(
-            (pos) => {
-                latInput.value = pos.coords.latitude;
-                lonInput.value = pos.coords.longitude;
-
-                generateBtn.disabled = false;
-                detectBtn.disabled = false;
-                detectBtn.innerText = "Location Detected ✓";
-            },
-            () => {
-                detectBtn.disabled = false;
-                detectBtn.innerText = "Detect Location";
-                generateBtn.disabled = true;
-                errorBox.classList.remove("d-none");
-            },
-            { enableHighAccuracy: true, timeout: 10000 }
-        );
-    };
+    navigator.geolocation.getCurrentPosition(
+        pos => {
+            lat.value = pos.coords.latitude;
+            lon.value = pos.coords.longitude;
+            generateBtn.disabled = false;
+            detectBtn.innerText = "Location Detected ✓";
+        },
+        () => {
+            err.classList.remove("d-none");
+        },
+        { enableHighAccuracy: true }
+    );
+};
 </script>
+
 </body>
 </html>
